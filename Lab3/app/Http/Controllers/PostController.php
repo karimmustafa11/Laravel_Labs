@@ -2,90 +2,83 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
+use App\Http\Controllers\Controller;
 use App\Models\Post;
-
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 
 class PostController extends Controller
 {
-    public function index()
+  
+    public function apiIndex()
     {
-        $posts = \App\Models\Post::with('user')->latest()->paginate(5);
-        return view('posts.index', compact('posts'));
+        $posts = Post::with('user')->latest()->get();
+        return response()->json($posts);
     }
-    
-    
 
-    public function create()
+   
+    public function apiShow($id)
     {
-        $users = \App\Models\User::all(); 
-        return view('posts.create', compact('users'));
+        $post = Post::with('user')->findOrFail($id);
+        return response()->json($post);
     }
+
     
-
-
-    public function show(Post $post)
+    public function apiStore(Request $request)
     {
-        $post->refresh(); 
-        return view('posts.show', compact('post'));
+        $request->validate([
+            'title' => 'required|string',
+            'body' => 'required|string',
+            'enabled' => 'required|boolean',
+        ]);
+
+        $post = Post::create([
+            'title' => $request->title,
+            'body' => $request->body,
+            'enabled' => $request->enabled,
+            'user_id' => Auth::id()
+        ]);
+
+        Auth::user()->increment('posts_count');
+
+        return response()->json($post, 201);
     }
+
     
+    public function apiUpdate(Request $request, $id)
+    {
+        $post = Post::findOrFail($id);
 
-public function edit($id)
-{
-    $post = \App\Models\Post::findOrFail($id);
-    $users = \App\Models\User::all();
-    return view('posts.edit', compact('post', 'users'));
-}
+        if ($post->user_id !== Auth::id()) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
 
-public function store(Request $request)
-{
-    $request->validate([
-        'title' => 'required|string',
-        'body' => 'required|string',
-        'enabled' => 'required|boolean',
-    ]);
+        $request->validate([
+            'title' => 'required|string',
+            'body' => 'required|string',
+            'enabled' => 'required|boolean',
+        ]);
 
-    Post::create([
-        'title' => $request->title,
-        'body' => $request->body,
-        'enabled' => $request->enabled,
-        'user_id' => auth()->id()
-    ]);
+        $post->update([
+            'title' => $request->title,
+            'body' => $request->body,
+            'enabled' => $request->enabled,
+        ]);
 
-    auth()->user()->increment('posts_count');
-
-    return redirect()->route('posts.index')->with('success', 'Post created successfully!');
-}
-
-
-public function destroy(Post $post)
-{
-    $post->delete(); 
-    return redirect()->route('posts.index')->with('success', 'Post deleted successfully');
-}
-
-public function update(Request $request, Post $post)
-{
-    $request->validate([
-        'title' => 'required|string',
-        'body' => 'required|string',
-        'enabled' => 'required|boolean',
-        'user_id' => 'required|exists:users,id',
-    ]);
-
-    $post->update([
-        'title' => $request->title,
-        'body' => $request->body,
-        'enabled' => $request->enabled,
-        'user_id' => $request->user_id,
-    ]);
-    if ($post->user_id !== auth()->id()) {
-        abort(403); 
-
+        return response()->json($post);
     }
-    rect()->route('posts.index')->with('success', 'Post updated successfully');
-}
 
+    
+    public function apiDestroy($id)
+    {
+        $post = Post::findOrFail($id);
 
+        if ($post->user_id !== Auth::id()) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        $post->delete();
+
+        return response()->json(['message' => 'Post deleted successfully']);
+    }
 }
